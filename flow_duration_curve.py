@@ -38,9 +38,6 @@ def flow_duration_curve(x, comparison=None, axis=0, ax=None, plot=True,
     :param log: bool, if True plot on loglog axis
     :param percentiles: tuple of int, percentiles that should be used for 
     drawing a range flow duration curve
-    :param decimal_places: defines how finely grained the range flow duration curve
-    is calculated and drawn. A low values makes it more finely grained.
-    A value which is too low might create artefacts.
     :param fdc_kwargs: dict, matplotlib keywords for the normal fdc
     :param fdc_range_kwargs: dict, matplotlib keywords for the range fdc
     :param fdc_comparison_kwargs: dict, matplotlib keywords for the comparison 
@@ -79,8 +76,7 @@ def flow_duration_curve(x, comparison=None, axis=0, ax=None, plot=True,
         
     # Make a range flow duration curve
     else:
-        plot_range_flow_duration_curve(ax, x, percentiles, decimal_places,
-                                       fdc_range_kwargs)
+        plot_range_flow_duration_curve(ax, x, percentiles, fdc_range_kwargs)
         
     # Add a comparison to the plot if is present
     if comparison is not None:
@@ -108,189 +104,90 @@ def plot_single_flow_duration_curve(ax, timeseries, kwargs):
     return: subplot object with a flow duration curve drawn into it
     """
     # Get the probability
-    ex_prob = calc_probabilities(timeseries)
+    exceedence = np.arange(1., len(timeseries) + 1) / len(timeseries)
+    exceedence *= 100
     # Plot the curve, check for empty kwargs
     if kwargs is not None:
-        ax.plot(ex_prob, sorted(timeseries, reverse=True), **kwargs)
+        ax.plot(exceedence, sorted(timeseries, reverse=True), **kwargs)
     else:
-        ax.plot(ex_prob, sorted(timeseries, reverse=True))
+        ax.plot(exceedence, sorted(timeseries, reverse=True))
     return ax
 
 
-def plot_range_flow_duration_curve(ax, x, percentiles, decimal_places, kwargs):
+def plot_range_flow_duration_curve(ax, x, percentiles, kwargs):
     """
     Plots a single range fdc into an ax.
     
     :param ax: matplotlib subplot object
     :param x: dataframe of several timeseries
-    :param decimal_places: defines how finely grained the range flow duration curve
-    is calculated and drawn. A low values makes it more finely grained.
+    :param decimal_places: defines how finely grained the range flow duration 
+    curve is calculated and drawn. A low values makes it more finely grained.
     A value which is too low might create artefacts.
     :param kwargs: dict, keyword arguments for matplotlib
     
     return: subplot object with a range flow duration curve drawn into it
     """
-    # Get the high and low values for every probability
-    ex_prob_df = calc_all_probabilities(x, decimal_places)
-    ex_prob, low_percentile, high_percentile = find_percentiles(ex_prob_df,
-                                                               percentiles)  
+    # Get the probabilites
+    exceedence = np.arange(1.,len(np.array(x))+1) /len(np.array(x))
+    exceedence *= 100
+
+    # Sort the data
+    sort = np.sort(x, axis=0)[::-1]
+    
+    # Get the percentiles
+    low_percentile = np.percentile(sort, percentiles[0], axis=1)
+    high_percentile = np.percentile(sort, percentiles[1], axis=1)
+    
     # Plot it, check for empty kwargs
     if kwargs is not None:
-        ax.fill_between(ex_prob, low_percentile, high_percentile, **kwargs)
+        ax.fill_between(exceedence, low_percentile, high_percentile, **kwargs)
     else:
-        ax.fill_between(ex_prob, low_percentile, high_percentile)
+        ax.fill_between(exceedence, low_percentile, high_percentile)
     return ax
-    
-
-def calc_probabilities(timeseries):
-    """
-    Calculates the rank and the exedence probability for a given timeseries
-    
-    :param timeseries: one dimensional time series
-    
-    return: sorted exceedence probabilities for timeseries
-    """    
-    # Sort the timeseries, so the probabilies are ordered right
-    timeseries = sorted(timeseries, reverse=True)
-    
-    # Calculate the excedence probability
-    ex_prob = []
-    len_timeseries = len(timeseries)
-    for rank in range(len_timeseries):
-        ex_prob_value = 100 * ((rank + 1) / (len_timeseries + 1))
-        ex_prob.append(ex_prob_value)
-    return ex_prob
-
-
-def calc_all_probabilities(x, decimal_places):
-    """
-    Calculates the high and low values for the exeedence probability for a 
-    dataframes consisting of several timeseries. 
-    
-    :param x: dataframe of several timeseries
-    :param decimal_places: defines how finely grained the range flow duration curve
-    is calculated and drawn. A low values makes it more finely grained.
-    A value which is too low might create artefacts.
-
-    return: dict, the keys are the rounded (to stepsize) probabilities, the 
-    value is all values that where assigned to that probability. 
-    """
-    # Create the main dictionary
-    ex_prob_dict = {}
-    for i in np.arange(0, 100 + 10**-decimal_places, 10**-decimal_places):
-        # Round i, as floats do sometimes not have an exact value
-        i = round(i, decimal_places)
-        # Add the key to the dict
-        ex_prob_dict[i] = []
-    
-    # Calculate the exedeence probability for a all timeseries
-    # Create a list, where all produced temporary dicts are saved
-    temp_list = []
-    for column in x:
-        timeseries = x[column]
-        timeseries_sorted = sorted(timeseries, reverse=True)
-        ex_prob_timeseries = calc_probabilities(timeseries)
-        
-        # Create a dictionary where the probabilities are the keys and the
-        # corresponding value of the timeseries is the value
-        timeseries_dict = {}
-        for i in range(len(ex_prob_timeseries)):
-            rounded_ex_prob = round(ex_prob_timeseries[i], decimal_places)
-            timeseries_dict[rounded_ex_prob] = timeseries_sorted[i]
-            if rounded_ex_prob > 100:
-                print(rounded_ex_prob)
-        # Sometimes the values 0.0 and 100.0 do not get values. Fill them up
-        # With the ones before
-        if 0.0 not in timeseries_dict.keys():
-            timeseries_dict[0.0] = timeseries_dict[10**-decimal_places]
-        if 100.0 not in timeseries_dict.keys():
-            timeseries_dict[100.0] = timeseries_dict[100-10**-decimal_places]
-        temp_list.append(timeseries_dict)
-        
-    # Now iterate through all just created dictionaries. Round the keys to 
-    # the desired accurazy
-    for timeseries_dict in temp_list:
-        for ex_prob in timeseries_dict.keys():
-            rounded_ex_prob = round(ex_prob, decimal_places)
-            # Now add the entry to the main dict, so every value of the
-            # timeseries is matched to the corresponding probability over all
-            # probabilites
-            ex_prob_dict[rounded_ex_prob].append(timeseries_dict[ex_prob])
-    
-    return ex_prob_dict
-
-
-def find_percentiles(ex_prob_dict, percentiles):
-    """
-    Finds the defined percentiles in a dict of exceedence probabilities.
-    
-    :param ex_prob_dict: dict of exceedence probabilities for several
-    of timeseries
-    :param percentiles: tuple, with int value (low_percentile, high_percentile)
-    
-    return: probabilities and correspondnig high and low percentiles of the 
-    values for all exceedence probabilities
-    """
-    # Find the high and low values
-    percentile_dict = {}
-    for key in sorted(ex_prob_dict.keys()):
-        low = np.percentile(ex_prob_dict[key], percentiles[0], 0)
-        high = np.percentile(ex_prob_dict[key], percentiles[1], 0)   
-        percentile_dict[key] = [low, high]
-    
-    # Get them in a plotable form
-    low_percentile = []
-    high_percentile = []
-    ex_probs = []
-    for ex_prob, (low, high) in percentile_dict.items():
-        low_percentile.append(low)
-        high_percentile.append(high)
-        ex_probs.append(ex_prob)
-    
-    return ex_probs, low_percentile, high_percentile     
 
 
 if __name__ == "__main__":
     # Create test data
-    np_array_one_dim = np.random.uniform(1,20,[1,1000])
-    np_array_100_dim = np.random.uniform(1,20,[100,1000])
-    df_one_dim = pd.DataFrame(np.random.uniform(1,20,[1,1000]))
-    df_100_dim = pd.DataFrame(np.random.normal(1,20,[100,1000]))
-    df_100_dim_transposed = pd.DataFrame(np.random.beta(
-                                                1,20,[100,1000])).transpose()
-    
+    np_array_one_dim = np.random.rayleigh(5, [1, 300])
+    np_array_75_dim = np.c_[np.random.rayleigh(11 ,[25, 300]),
+                            np.random.rayleigh(10, [25, 300]),
+                            np.random.rayleigh(8, [25, 300])]
+    df_one_dim = pd.DataFrame(np.random.rayleigh(9, [1, 300]))
+    df_75_dim = pd.DataFrame(np.c_[np.random.rayleigh(8, [25, 300]),
+                                   np.random.rayleigh(15, [25, 300]),
+                                   np.random.rayleigh(3, [25, 300])])
+    df_75_dim_transposed = pd.DataFrame(np_array_75_dim.transpose())
     
     # Call the function with all different arguments
     fig, subplots = plt.subplots(nrows=2, ncols=3)
     ax1 = flow_duration_curve(np_array_one_dim, ax=subplots[0,0], plot=False,
                               axis=1, fdc_kwargs={"linewidth":0.5})
-    ax1.set_title("np array one dim")
+    ax1.set_title("np array one dim\nwith kwargs")
     
-    ax2 = flow_duration_curve(np_array_100_dim, ax=subplots[0,1], plot=False,
-                              axis=1)
-    ax2.set_title("np array 100 dim")
+    ax2 = flow_duration_curve(np_array_75_dim, ax=subplots[0,1], plot=False,
+                              axis=1, log=False, percentiles=(0,100))
+    ax2.set_title("np array 75 dim\nchanged percentiles\nnolog")
     
     ax3 = flow_duration_curve(df_one_dim, ax=subplots[0,2], plot=False, axis=1,
                               log=False, fdc_kwargs={"linewidth":0.5})
-    ax3.set_title("\ndf one dim\nno log")
+    ax3.set_title("\ndf one dim\nno log\nwith kwargs")
     
-    ax4 = flow_duration_curve(df_100_dim, ax=subplots[1,0], plot=False, axis=1)
-    ax4.set_title("df 100 dim")
+    ax4 = flow_duration_curve(df_75_dim, ax=subplots[1,0], plot=False, axis=1,
+                              log=False)
+    ax4.set_title("df 75 dim\nno log")
     
-    ax5 = flow_duration_curve(df_100_dim_transposed, ax=subplots[1,1], 
+    ax5 = flow_duration_curve(df_75_dim_transposed, ax=subplots[1,1], 
                               plot=False)
-    ax5.set_title("df 100 dim transposed")
+    ax5.set_title("df 75 dim transposed")
     
-    ax6 = flow_duration_curve(df_100_dim, ax=subplots[1,2], plot=False,
+    ax6 = flow_duration_curve(df_75_dim, ax=subplots[1,2], plot=False,
                               comparison=np_array_one_dim, axis=1, 
                               fdc_comparison_kwargs={"color":"black", 
                                                      "label":"comparison",
                                                      "linewidth":0.5},
                               fdc_range_kwargs={"label":"range_fdc"})
-    ax6.set_title("df 100 dim\n with comparison\nand kwargs")
+    ax6.set_title("df 75 dim\n with comparison\nwith kwargs")
     ax6.legend()
-    
-    plt.suptitle("The different shapes are caused by different distributions")
     
     # Show the beauty
     fig.tight_layout()
