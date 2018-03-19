@@ -82,9 +82,6 @@ def flow_duration_curve(x, comparison=None, axis=0, ax=None, plot=True,
     if comparison is not None:
         ax = plot_single_flow_duration_curve(ax, comparison[0], 
                                              fdc_comparison_kwargs)    
-
-    # Name the x-axis
-    ax.set_xlabel("Exceedence [%]")
     
     # show if requested
     if plot:
