@@ -10,7 +10,7 @@ import numpy as np
 
 
 def flow_duration_curve(x, comparison=None, axis=0, ax=None, plot=True, 
-                        log=True, percentiles=(5, 95), decimal_places=1,
+                        log=True, percentiles=(5, 95), 
                         fdc_kwargs=None, fdc_range_kwargs=None, 
                         fdc_comparison_kwargs=None):
     """
@@ -120,9 +120,6 @@ def plot_range_flow_duration_curve(ax, x, percentiles, kwargs):
     
     :param ax: matplotlib subplot object
     :param x: dataframe of several timeseries
-    :param decimal_places: defines how finely grained the range flow duration 
-    curve is calculated and drawn. A low values makes it more finely grained.
-    A value which is too low might create artefacts.
     :param kwargs: dict, keyword arguments for matplotlib
     
     return: subplot object with a range flow duration curve drawn into it
